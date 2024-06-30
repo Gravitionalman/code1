@@ -1,3 +1,71 @@
+
+#include <Wire.h>
+float RatePitch, RateRoll, RateYaw;
+float RateCalibrationPitch, RateCalibrationRoll, RateCalibrationYaw;
+int RateCalibrationNumber;
+#include <PulsePosition.h>
+PulsePositionInput ReceiverInput(RISING);
+float ReceiverValue[]={0, 0, 0, 0, 0, 0, 0, 0};
+int ChannelNumber=0; 
+float Voltage, Current, BatteryRemaining, BatteryAtStart;
+float CurrentConsumed=0;
+float BatteryDefault=1300;
+uint32_t LoopTimer;
+float DesiredRateRoll, DesiredRatePitch, DesiredRateYaw;
+float ErrorRateRoll, ErrorRatePitch, ErrorRateYaw;
+float InputRoll, InputThrottle, InputPitch, InputYaw;
+float PrevErrorRateRoll, PrevErrorRatePitch, PrevErrorRateYaw;
+float PrevItermRateRoll, PrevItermRatePitch, PrevItermRateYaw;
+float PIDReturn[]={0, 0, 0};
+float PRateRoll=0.6 ; float PRatePitch=PRateRoll; float PRateYaw=2;
+float IRateRoll=3.5 ; float IRatePitch=IRateRoll; float IRateYaw=12;
+float DRateRoll=0.03 ; float DRatePitch=DRateRoll; float DRateYaw=0;
+float MotorInput1, MotorInput2, MotorInput3, MotorInput4;
+void battery_voltage(void) {
+  Voltage=(float)analogRead(15)/62;
+  Current=(float)analogRead(21)*0.089;
+}
+void read_receiver(void){
+  ChannelNumber = ReceiverInput.available();  
+  if (ChannelNumber > 0) {
+         for (int i=1; i<=ChannelNumber;i++){
+              ReceiverValue[i-1]=ReceiverInput.read(i);
+         }
+  }
+}
+void gyro_signals(void) {
+  Wire.beginTransmission(0x68);
+  Wire.write(0x1A);
+  Wire.write(0x05);
+  Wire.endTransmission();
+  Wire.beginTransmission(0x68);
+  Wire.write(0x1B);
+  Wire.write(0x08);
+  Wire.endTransmission();
+  Wire.beginTransmission(0x68);
+  Wire.write(0x43);
+  Wire.endTransmission(); 
+  Wire.requestFrom(0x68,6);
+  int16_t GyroX=Wire.read()<<8 | Wire.read();
+  int16_t GyroY=Wire.read()<<8 | Wire.read();
+  int16_t GyroZ=Wire.read()<<8 | Wire.read();
+  RateRoll=(float)GyroX/65.5;
+  RatePitch=(float)GyroY/65.5;
+  RateYaw=(float)GyroZ/65.5;
+}
+void pid_equation(float Error, float P , float I, float D, float PrevError, float PrevIterm) {
+  float Pterm=P*Error;
+  float Iterm=PrevIterm+I*(Error+PrevError)*0.004/2;
+  if (Iterm > 400) Iterm=400;
+  else if (Iterm <-400) Iterm=-400;
+  float Dterm=D*(Error-PrevError)/0.004;
+  float PIDOutput= Pterm+Iterm+Dterm;
+  if (PIDOutput>400) PIDOutput=400;
+  else if (PIDOutput <-400) PIDOutput=-400;
+  PIDReturn[0]=PIDOutput;
+  PIDReturn[1]=Error;
+  PIDReturn[2]=Iterm;
+}
 void reset_pid(void) {
   PrevErrorRateRoll=0; PrevErrorRatePitch=0; PrevErrorRateYaw=0;
   PrevItermRateRoll=0; PrevItermRatePitch=0; PrevItermRateYaw=0;
